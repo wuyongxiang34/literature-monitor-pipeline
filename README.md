@@ -58,7 +58,18 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 ### API Key
 
-编辑根目录下由安装脚本创建的 `.env`：
+先在相应官方入口申请密钥，再编辑根目录下由安装脚本创建的 `.env`：
+
+| `.env` 变量 | 数据源 | 官方申请入口 | 说明 |
+| --- | --- | --- | --- |
+| `ELSEVIER_API_KEY` | ScienceDirect / Scopus | [Elsevier Developer Portal：创建 API Key](https://dev.elsevier.com/apikey/create) | 注册或登录 Elsevier 账号后创建。基础权限和配额取决于使用场景；完整内容访问通常还取决于所在机构的订阅。 |
+| `OPENALEX_API_KEY` | OpenAlex | [OpenAlex：Settings → API key](https://openalex.org/settings/api) | 注册或登录后可取得密钥；官方提供免费用量，更多调用可能按其当前方案计费。 |
+| `SEMANTIC_SCHOLAR_API_KEY` | Semantic Scholar | [Semantic Scholar：API Key 申请表](https://www.semanticscholar.org/product/api#api-key-form) | 提交申请后由官方通过邮件发放。项目未填写时会跳过该数据源。 |
+| `WEBOFSCIENCE_API_KEY` | Web of Science | [Clarivate：Web of Science Starter API](https://developer.clarivate.com/apis/wos-starter) | 先注册 Clarivate Developer Portal，再注册应用并订阅 Starter API 方案；官方提供个人试用和机构方案。 |
+
+`ELSEVIER_INST_TOKEN` 不是普通用户公开自助创建的 API Key，仅在 Elsevier API Support 或所在机构向你提供时填写。Crossref 与 PubMed 在当前项目中不要求 API Key。各平台的资格、配额和费用可能调整，请以链接中的官方说明为准。
+
+按下面格式填写：
 
 ```dotenv
 # 默认必需源
