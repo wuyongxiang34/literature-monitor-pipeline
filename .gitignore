@@ -1,0 +1,41 @@
+# Secrets and local research profiles
+.env
+.env.*
+!.env.example
+config/active_profile.yaml
+config/profiles/local/
+
+# Python environments and caches
+.venv/
+.pip-cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Runtime data, licensed exports, and browser sessions
+ES_HWB_Literature_System/
+Literature_Monitor_Data/
+WOS/
+savedrecs*.txt
+data/runs/
+data/state/
+data/logs/
+data/archive/raw/
+
+# Logs, temporary files, and editor/OS state
+*.log
+*.tmp
+*.bak
+*.old
+~$*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+playwright-report/
+test-results/

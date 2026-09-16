@@ -1,0 +1,72 @@
+schema_version: 1
+
+profile:
+  id: es_hwb
+  name: 生态系统服务与人类福祉
+  description: 生态系统服务（ES）与人类福祉（HWB）
+
+query:
+  mode: guided
+  groups:
+    - name: 生态系统服务
+      terms:
+        - ecosystem service*
+        - provisioning service*
+        - regulating service*
+        - cultural service*
+        - ES valuation
+    - name: 人类福祉
+      terms:
+        - human wellbeing*
+        - human well-being*
+        - human welfare*
+        - quality of life
+        - social wellbeing
+        - subjective wellbeing
+  exclude:
+    - western blot
+    - embryonic stem
+    - effect size
+    - hardware
+    - homework
+  advanced_wos: ""
+  portable_queries: []
+  max_generated_queries: 12
+
+selection:
+  final_selection_count: 5
+  first_run_lookback_days: 30
+  lookback_days: 14
+
+scoring:
+  topic_gate: 10
+  method_terms:
+    - structural equation model
+    - SEM
+    - Bayesian network
+    - InVEST
+    - GIS
+    - survey
+    - experiment
+    - meta-analysis
+    - systematic review
+    - causal
+  applied_terms:
+    - policy
+    - management
+    - planning
+    - restoration
+    - conservation
+    - decision support
+    - nature-based solution
+  journal_tiers:
+    tier_1:
+      - Nature
+      - Science
+      - Proceedings of the National Academy of Sciences
+    tier_2:
+      - Ecosystem Services
+      - Ecological Economics
+      - Landscape and Urban Planning
+      - Global Environmental Change
+      - People and Nature

@@ -1,0 +1,41 @@
+search:
+  candidate_pool_size: 30
+  final_selection_count: 5
+  first_run_lookback_days: 30
+  lookback_days: 14
+  per_source_limit: 60
+  request_timeout_seconds: 30
+  required_sources:
+    - sciencedirect
+
+important_authors_or_orgs: []
+
+scoring:
+  topic_gate: 10
+  weights:
+    topic: 35
+    method: 20
+    journal: 15
+    network: 10
+    applied: 10
+    archival: 10
+  method_terms:
+    - structural equation model
+    - SEM
+    - Bayesian network
+    - InVEST
+    - GIS
+    - survey
+    - experiment
+    - meta-analysis
+    - systematic review
+    - causal
+  applied_terms:
+    - policy
+    - management
+    - planning
+    - restoration
+    - conservation
+    - decision support
+    - nature-based solution
+  journal_tiers: {}

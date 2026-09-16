@@ -1,0 +1,62 @@
+search:
+  sources:
+    - sciencedirect
+    - openalex
+    - crossref
+    - pubmed
+    - semantic_scholar
+
+sciencedirect:
+  # Search V2 returns result metadata; enrich DOI records through
+  # Article Retrieval -> Scopus Abstract Retrieval -> Metadata only.
+  abstract_enrichment: true
+  abstract_enrichment_limit: 30
+
+wos:
+  enabled: true
+  # Production modes:
+  # - api: official Web of Science Starter API (recommended)
+  # - manual_import: normal Chrome export -> inbox -> automatic SQLite import
+  # - playwright: experimental only; WoS may reject automated browsers
+  mode: api
+  api_type: starter
+  api_url: https://api.clarivate.com/apis/wos-starter/v1
+  api_key_env: WEBOFSCIENCE_API_KEY
+  database: WOS
+  sort_field: LD+D
+  use_modified_time_span: true
+  require_sci_expanded_evidence: true
+  # WoS may close automated headless connections. Keep the dedicated Chrome
+  # window visible for the authenticated institutional session.
+  headless: false
+  browser_channel: chrome
+  navigation_timeout_seconds: 90
+  navigation_attempts: 2
+  page_ready_wait_seconds: 8
+  result_wait_seconds: 5
+  home_url: https://www.webofscience.com/
+  advanced_search_url: https://www.webofscience.com/wos/woscc/advanced-search
+  selectors:
+    query_input:
+      - 'textarea[data-ta="search-query"]'
+      - 'textarea[placeholder*="query"]'
+      - 'textarea'
+    search_button:
+      - 'button[data-ta="run-search"]'
+      - 'button:has-text("Search")'
+    result_cards:
+      - app-record
+      - '[data-ta="record"]'
+      - '.search-results-item'
+    title:
+      - 'app-summary-title a'
+      - 'a[data-ta="summary-record-title-link"]'
+      - 'a.title'
+    authors:
+      - 'app-summary-authors'
+      - '[data-ta="authors"]'
+      - '.authors'
+    source:
+      - 'app-summary-source-title'
+      - '[data-ta="source-title"]'
+      - '.source-title'

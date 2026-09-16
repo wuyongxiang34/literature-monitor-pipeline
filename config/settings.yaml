@@ -1,0 +1,20 @@
+include:
+  - search.yaml
+  - sources.yaml
+
+schedule:
+  daily_at: "08:00"
+  timezone: Asia/Taipei
+
+delivery:
+  channel: local
+
+archive:
+  enabled: true
+  write_wiki: false
+
+desktop_widget:
+  enabled: true
+  history_reports: 4
+  width: 520
+  height: 720
