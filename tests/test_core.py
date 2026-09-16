@@ -40,7 +40,9 @@ class NormalizeTests(unittest.TestCase):
 class ScoringTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.config = load_config(PROJECT_ROOT / "config" / "settings.yaml")
+        cls.config = load_config(
+            PROJECT_ROOT / "config" / "settings.yaml", profile_id="es_hwb"
+        )
 
     def test_scores_are_capped_and_total_is_recalculated(self):
         paper = Paper(

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -79,7 +80,7 @@ class DesktopWidgetTests(unittest.TestCase):
             archive_content = archive_page.read_text(encoding="utf-8")
             self.assertIn("2026-08-22 文献速览", archive_content)
             self.assertIn("08-23", archive_content)
-            self.assertEqual(find_latest_report(root), report)
+            self.assertTrue(os.path.samefile(find_latest_report(root), report))
 
 
 if __name__ == "__main__":

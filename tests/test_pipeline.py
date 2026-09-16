@@ -18,7 +18,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 class PipelineIntegrationTests(unittest.TestCase):
     def test_offline_end_to_end_outputs(self):
-        base = load_config(PROJECT_ROOT / "config" / "settings.yaml")
+        base = load_config(
+            PROJECT_ROOT / "config" / "settings.yaml", profile_id="es_hwb"
+        )
         with tempfile.TemporaryDirectory() as directory:
             config = copy.deepcopy(base)
             root = Path(directory)
@@ -83,7 +85,9 @@ class PipelineIntegrationTests(unittest.TestCase):
             workbook.close()
 
     def test_wos_unavailable_marks_run_partial(self):
-        base = load_config(PROJECT_ROOT / "config" / "settings.yaml")
+        base = load_config(
+            PROJECT_ROOT / "config" / "settings.yaml", profile_id="es_hwb"
+        )
         with tempfile.TemporaryDirectory() as directory:
             config = copy.deepcopy(base)
             config["_project_root"] = directory
@@ -113,7 +117,9 @@ class PipelineIntegrationTests(unittest.TestCase):
             self.assertEqual(summary["status"], "PARTIAL")
 
     def test_profiles_use_isolated_data_roots_and_dynamic_report_titles(self):
-        base = load_config(PROJECT_ROOT / "config" / "settings.yaml")
+        base = load_config(
+            PROJECT_ROOT / "config" / "settings.yaml", profile_id="es_hwb"
+        )
         with tempfile.TemporaryDirectory() as directory:
             summaries = []
             for profile_id, profile_name in (("topic_one", "Topic One"), ("topic_two", "Topic Two")):
