@@ -49,7 +49,7 @@ Register-ScheduledTask `
     -Trigger $Trigger `
     -Principal $Principal `
     -Settings $Settings `
-    -Description "Daily literature search, SQLite update, and Excel export for profile $Profile (v0.1.0)." `
+    -Description "Daily literature search, SQLite update, and Excel export for profile $Profile." `
     -Force | Out-Null
 
 $Task = Get-ScheduledTask -TaskName $TaskName

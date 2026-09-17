@@ -1,7 +1,7 @@
 search:
   candidate_pool_size: 30
   final_selection_count: 5
-  first_run_lookback_days: 30
+  first_run_lookback_days: 90
   lookback_days: 14
   per_source_limit: 60
   request_timeout_seconds: 30

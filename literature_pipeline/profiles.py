@@ -263,7 +263,7 @@ def validate_profile_document(
     selection = document.get("selection") or {}
     for key, default in (
         ("final_selection_count", 5),
-        ("first_run_lookback_days", 30),
+        ("first_run_lookback_days", 90),
         ("lookback_days", 14),
     ):
         if int(selection.get(key, default)) < 1:
@@ -283,8 +283,8 @@ def profile_overlay(document: dict[str, Any], enabled_sources: list[str]) -> dic
     selection = document.get("selection") or {}
     output = document.get("output") or {}
     data_root = str(output.get("root") or f"Literature_Monitor_Data/{profile_id}")
-    flattened_terms = [WILDCARD_RE.sub("", term).strip('" ') for group in groups for term in group["terms"]]
-    excludes = [WILDCARD_RE.sub("", validate_term(term)).strip('" ') for term in query.get("exclude", [])]
+    flattened_terms = [validate_term(term).strip('" ') for group in groups for term in group["terms"]]
+    excludes = [validate_term(term).strip('" ') for term in query.get("exclude", [])]
     overlay: dict[str, Any] = {
         "research_profile": {
             "id": profile_id,
@@ -295,12 +295,12 @@ def profile_overlay(document: dict[str, Any], enabled_sources: list[str]) -> dic
             "queries": portable_queries,
             "wos_query": wos_query,
             "final_selection_count": int(selection.get("final_selection_count", 5)),
-            "first_run_lookback_days": int(selection.get("first_run_lookback_days", 30)),
+            "first_run_lookback_days": int(selection.get("first_run_lookback_days", 90)),
             "lookback_days": int(selection.get("lookback_days", 14)),
         },
         "keywords": {
             "required_concept_groups": [
-                [WILDCARD_RE.sub("", term).strip('" ') for term in group["terms"]]
+                [validate_term(term).strip('" ') for term in group["terms"]]
                 for group in groups
             ],
             "include": flattened_terms,
@@ -369,26 +369,88 @@ def configure_interactively(
     input_fn: Callable[[str], str] = input,
     output_fn: Callable[[str], None] = print,
 ) -> Path:
-    output_fn("创建或更新研究主题。多个同义词请用分号分隔。")
+    output_fn("创建或更新研究主题。")
+    output_fn("同一概念组内的同义词用 OR，不同概念组之间用 AND。")
+    output_fn("示例：种子性状组可填 seed trait; seed functional trait；海岛组可填 island; insular。")
+    output_fn("多个检索词请使用英文分号 ; 分隔，不要手工输入 AND/OR。")
     profile_id = validate_profile_id(input_fn("主题 ID（小写英文/数字/-/_）：").strip())
-    name = input_fn("主题名称：").strip()
+    target = profile_directories(config_path)[0] / f"{profile_id}.yaml"
+    existing = _read_yaml(target) if target.exists() else {}
+    existing_profile = existing.get("profile") or {}
+    existing_query = existing.get("query") or {}
+    existing_selection = existing.get("selection") or {}
+    if existing:
+        output_fn(f"正在更新现有主题：{target}")
+
+    default_name = str(existing_profile.get("name") or "").strip()
+    name_prompt = f"主题名称 [{default_name}]：" if default_name else "主题名称："
+    name = input_fn(name_prompt).strip() or default_name
     if not name:
         raise ProfileError("主题名称不能为空")
-    description = input_fn("主题描述（可留空）：").strip() or name
-    mode = (input_fn("模式 guided/advanced [guided]：").strip() or "guided").casefold()
+    default_description = str(existing_profile.get("description") or name).strip()
+    description = input_fn(f"主题描述 [{default_description}]：").strip() or default_description
+    default_mode = str(existing_query.get("mode") or "guided").casefold()
+    mode = (input_fn(f"模式 guided/advanced [{default_mode}]：").strip() or default_mode).casefold()
     groups: list[dict[str, Any]] = []
-    while True:
-        group_name = input_fn("概念组名称（完成时直接回车）：").strip()
-        if not group_name:
-            break
-        terms = [item.strip() for item in input_fn("该组检索词（用 ; 分隔）：").split(";") if item.strip()]
-        groups.append({"name": group_name, "terms": terms})
-    excludes = [item.strip() for item in input_fn("排除词（用 ; 分隔，可留空）：").split(";") if item.strip()]
+    existing_groups = existing_query.get("groups") or []
+    if existing_groups:
+        current = "；".join(
+            f"{group.get('name')}: {', '.join(group.get('terms') or [])}"
+            for group in existing_groups
+        )
+        output_fn(f"当前概念组：{current}")
+        keep_groups = input_fn("保留当前概念组？[Y/n]：").strip().casefold() not in {"n", "no"}
+        if keep_groups:
+            groups = existing_groups
+    if not groups:
+        while True:
+            group_name = input_fn("概念组名称（完成时直接回车）：").strip()
+            if not group_name:
+                break
+            terms = [
+                item.strip()
+                for item in input_fn("该组检索词（用 ; 分隔）：").split(";")
+                if item.strip()
+            ]
+            groups.append({"name": group_name, "terms": terms})
+
+    current_excludes = "; ".join(existing_query.get("exclude") or [])
+    exclude_prompt = f"排除词（用 ; 分隔）[{current_excludes}]：" if current_excludes else "排除词（用 ; 分隔，可留空）："
+    exclude_input = input_fn(exclude_prompt).strip()
+    excludes = (
+        [item.strip() for item in exclude_input.split(";") if item.strip()]
+        if exclude_input
+        else list(existing_query.get("exclude") or [])
+    )
     advanced_wos = ""
-    portable: list[str] = []
+    portable: list[str] = list(existing_query.get("portable_queries") or []) if mode == "guided" else []
     if mode == "advanced":
-        advanced_wos = input_fn("完整 WoS 高级检索式：").strip()
-        portable = [item.strip() for item in input_fn("非 WoS 检索式（用 ; 分隔，可留空）：").split(";") if item.strip()]
+        current_advanced = str(existing_query.get("advanced_wos") or "").strip()
+        advanced_wos = input_fn("完整 WoS 高级检索式：").strip() or current_advanced
+        current_portable = list(existing_query.get("portable_queries") or [])
+        portable_input = input_fn("非 WoS 检索式（用 ; 分隔，可留空）：").strip()
+        portable = (
+            [item.strip() for item in portable_input.split(";") if item.strip()]
+            if portable_input
+            else current_portable
+        )
+
+    def prompt_days(label: str, default: int) -> int:
+        raw = input_fn(f"{label} [{default}]：").strip()
+        try:
+            value = int(raw or default)
+        except ValueError as exc:
+            raise ProfileError(f"{label}必须是正整数") from exc
+        if value < 1:
+            raise ProfileError(f"{label}必须大于 0")
+        return value
+
+    first_run_days = prompt_days(
+        "首次检索回溯天数", int(existing_selection.get("first_run_lookback_days", 90))
+    )
+    routine_days = prompt_days(
+        "日常检索回溯天数", int(existing_selection.get("lookback_days", 14))
+    )
     document: dict[str, Any] = {
         "schema_version": 1,
         "profile": {"id": profile_id, "name": name, "description": description},
@@ -398,25 +460,36 @@ def configure_interactively(
             "exclude": excludes,
             "advanced_wos": advanced_wos,
             "portable_queries": portable,
-            "max_generated_queries": 12,
+            "max_generated_queries": int(existing_query.get("max_generated_queries", 12)),
         },
         "selection": {
-            "final_selection_count": 5,
-            "first_run_lookback_days": 30,
-            "lookback_days": 14,
+            "final_selection_count": int(existing_selection.get("final_selection_count", 5)),
+            "first_run_lookback_days": first_run_days,
+            "lookback_days": routine_days,
         },
-        "scoring": {"topic_gate": 10, "method_terms": [], "applied_terms": [], "journal_tiers": {}},
+        "scoring": existing.get("scoring") or {
+            "topic_gate": 10,
+            "method_terms": [],
+            "applied_terms": [],
+            "journal_tiers": {},
+        },
     }
-    target = profile_directories(config_path)[0] / f"{profile_id}.yaml"
+    if existing.get("output"):
+        document["output"] = existing["output"]
+    validate_profile_document(document)
+    output_fn("\n配置预览：")
+    output_fn(f"WoS：{build_guided_wos(document) if mode == 'guided' else advanced_wos}")
+    output_fn("非 WoS：" + " | ".join(build_portable_queries(document)))
+    output_fn(f"时间范围：首次 {first_run_days} 天；日常 {routine_days} 天")
     overwrite = False
     if target.exists():
         overwrite = input_fn(f"主题 {profile_id} 已存在，确认覆盖？[y/N]：").strip().casefold() == "y"
         if not overwrite:
             raise ProfileError("已取消更新")
+    elif input_fn("保存这个主题？[Y/n]：").strip().casefold() in {"n", "no"}:
+        raise ProfileError("已取消创建")
     path = save_local_profile(config_path, document, overwrite=overwrite)
     if input_fn("设为当前活动主题？[Y/n]：").strip().casefold() not in {"n", "no"}:
         set_active_profile(config_path, profile_id)
     output_fn(f"已保存：{path}")
-    output_fn(f"WoS：{build_guided_wos(document) if mode == 'guided' else advanced_wos}")
-    output_fn("非 WoS：" + " | ".join(build_portable_queries(document)))
     return path

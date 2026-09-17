@@ -8,7 +8,12 @@ from literature_pipeline.config import load_config
 from literature_pipeline.digest import build_digest
 from literature_pipeline.models import Paper
 from literature_pipeline.normalize import deduplicate, normalize_doi
-from literature_pipeline.scoring import score_and_select, score_paper, validate_scores
+from literature_pipeline.scoring import (
+    score_and_select,
+    score_and_select_detailed,
+    score_paper,
+    validate_scores,
+)
 from literature_pipeline.storage import LiteratureDatabase
 
 
@@ -77,6 +82,30 @@ class ScoringTests(unittest.TestCase):
         scored, _ = score_and_select([paper], self.config)
         self.assertEqual(scored, [paper])
 
+    def test_wos_style_wildcards_work_in_local_topic_gate(self):
+        config = dict(self.config)
+        config["profile_query"] = {
+            "groups": [
+                {"name": "climate", "terms": ["climat*"]},
+                {"name": "population", "terms": ["wom?n"]},
+                {"name": "spelling", "terms": ["colo$r"]},
+            ]
+        }
+        config["keywords"] = {
+            "include": ["climat*", "wom?n", "colo$r"],
+            "exclude": [],
+            "required_concept_groups": [["climat*"], ["wom?n"], ["colo$r"]],
+        }
+        paper = Paper(title="Climate effects on women and colour preferences")
+        scored, _ = score_and_select([paper], config)
+        self.assertEqual(scored, [paper])
+
+    def test_filter_diagnostics_name_missing_concept_groups(self):
+        paper = Paper(title="Seed trait variation in continental forests")
+        _, _, summary, rejected = score_and_select_detailed([paper], self.config)
+        self.assertEqual(summary["rejected"], 1)
+        self.assertTrue(rejected[0]["missing_concept_groups"])
+
 
 class DatabaseTests(unittest.TestCase):
     def test_unique_doi_updates_instead_of_duplicating(self):
@@ -116,11 +145,49 @@ class DigestTests(unittest.TestCase):
             [],
             retrieved=100,
             deduplicated=90,
+            eligible_count=12,
             new_count=0,
             source_status={"openalex": "ok: 10 records"},
+            filter_summary={},
         )
         self.assertIn("均已存在于数据库", digest)
         self.assertNotIn("没有达到主题门槛的新文献", digest)
+
+    def test_topic_rejection_is_not_reported_as_existing(self):
+        digest = build_digest(
+            "2026-09-17",
+            "island",
+            "Seed traits",
+            "Island seed traits",
+            [],
+            retrieved=61,
+            deduplicated=61,
+            eligible_count=0,
+            new_count=0,
+            source_status={"crossref": "ok: 60 records"},
+            filter_summary={
+                "missing_concept_groups": {"种子性状": 41, "海岛": 20}
+            },
+        )
+        self.assertIn("全部未通过主题筛选", digest)
+        self.assertIn("海岛", digest)
+        self.assertNotIn("均已存在于数据库", digest)
+
+    def test_no_retrieved_records_has_source_guidance(self):
+        digest = build_digest(
+            "2026-09-17",
+            "island",
+            "Seed traits",
+            "Island seed traits",
+            [],
+            retrieved=0,
+            deduplicated=0,
+            eligible_count=0,
+            new_count=0,
+            source_status={"crossref": "ok: 0 records"},
+            filter_summary={},
+        )
+        self.assertIn("没有返回候选记录", digest)
 
 
 if __name__ == "__main__":

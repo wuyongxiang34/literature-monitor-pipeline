@@ -7,6 +7,7 @@ config/profiles/local/
 
 # Python environments and caches
 .venv/
+.venv_backup_*/
 .pip-cache/
 __pycache__/
 *.py[cod]
@@ -39,3 +40,6 @@ Thumbs.db
 .vscode/
 playwright-report/
 test-results/
+
+# Locally downloaded/generated release archives
+/literature-monitor-pipeline-*.zip

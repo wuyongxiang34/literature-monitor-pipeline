@@ -201,8 +201,14 @@ def _source_badges(metadata: list[tuple[str, str]]) -> str:
 
 
 def _metric_cards(metadata: list[tuple[str, str]]) -> str:
-    wanted = ("候选记录", "去重后", "本次新增", "最终精选")
-    labels = {"候选记录": "候选", "去重后": "去重", "本次新增": "新增", "最终精选": "精选"}
+    wanted = ("候选记录", "去重后", "主题筛选后", "本次新增", "最终精选")
+    labels = {
+        "候选记录": "候选",
+        "去重后": "去重",
+        "主题筛选后": "筛选后",
+        "本次新增": "新增",
+        "最终精选": "精选",
+    }
     values = {key: value for key, value in metadata}
     cards = []
     for key in wanted:
@@ -252,7 +258,7 @@ def build_html(
     history_items: list[ReportLink] | None = None,
 ) -> str:
     report_date = _report_date(parsed, report_path)
-    field_value = next((value for key, value in parsed.metadata if "研究方向" in key), "ES × HWB")
+    field_value = next((value for key, value in parsed.metadata if "研究方向" in key), "未命名研究主题")
     updated = dt.datetime.fromtimestamp(report_path.stat().st_mtime).strftime("%H:%M")
     trend = parsed.trend or "今天暂无新的主题趋势信号。"
     folder_url = report_path.parent.as_uri()
@@ -283,7 +289,7 @@ def build_html(
     .actions {{ display:flex; gap:7px; }}
     .icon-btn {{ display:grid; place-items:center; width:32px; height:32px; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--green); cursor:pointer; font-size:16px; box-shadow:0 2px 8px rgba(25,51,39,.05); }}
     .subtitle {{ margin:8px 0 0 22px; color:var(--muted); font-size:12px; }}
-    .metrics {{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }}
+    .metrics {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(72px,1fr)); gap:8px; margin-bottom:12px; }}
     .metric {{ padding:11px 8px 9px; border:1px solid rgba(32,107,79,.10); border-radius:13px; background:rgba(255,255,255,.82); text-align:center; box-shadow:0 5px 18px rgba(26,58,42,.05); }}
     .metric span {{ display:block; color:var(--muted); font-size:11px; }}
     .metric strong {{ display:block; margin-top:3px; color:var(--green); font-family:Georgia,serif; font-size:22px; }}

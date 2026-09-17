@@ -12,19 +12,82 @@ permissions:
 jobs:
   windows-tests:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - name: Check out source
         uses: actions/checkout@v7
       - name: Set up Python
         uses: actions/setup-python@v7
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
           cache: pip
-      - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+      - name: Install core dependencies from wheels
+        run: 'python -m pip install -r requirements.txt --only-binary=:all:'
       - name: Validate base configuration
         run: python run.py validate
       - name: Validate example research profile
         run: python run.py profiles validate es_hwb
       - name: Run tests
         run: python -m unittest discover -s tests -v
+
+  windows-setup-smoke:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+      - name: Create an unsupported Python 3.9 environment
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.9"
+      - name: Seed old virtual environment
+        run: python -m venv .venv
+      - name: Make Python 3.14 available
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Verify rejection and preserved rebuild
+        shell: pwsh
+        run: |
+          $Rejected = $false
+          try {
+            & .\scripts\setup.ps1 -PythonVersion 3.14
+          }
+          catch {
+            if ($_.Exception.Message -notmatch "existing \.venv") { throw }
+            $Rejected = $true
+          }
+          if (-not $Rejected) { throw "Unsupported .venv was not rejected." }
+          & .\scripts\setup.ps1 -PythonVersion 3.14 -RecreateVenv -WithPlaywright
+          if (-not (Get-ChildItem -Path ".venv_backup_*" -Directory)) {
+            throw "The previous environment was not preserved."
+          }
+          & .\.venv\Scripts\python.exe -c "import playwright, sys; assert sys.version_info[:2] == (3, 14)"
+
+  windows-path-python-fallback:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+      - name: Make Python 3.14 available on PATH
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Install without the Python Launcher
+        shell: pwsh
+        run: |
+          $Launcher = Get-Command py -ErrorAction SilentlyContinue
+          if ($null -ne $Launcher) {
+            $LauncherDirectory = Split-Path -Parent $Launcher.Source
+            $env:PATH = (($env:PATH -split ";") | Where-Object {
+              $_.TrimEnd("\") -ne $LauncherDirectory.TrimEnd("\")
+            }) -join ";"
+          }
+          if (Get-Command py -ErrorAction SilentlyContinue) {
+            throw "Python Launcher is still visible; fallback was not tested."
+          }
+          Get-Command python -ErrorAction Stop | Out-Null
+          & .\scripts\setup.ps1 -PythonVersion 3.14
+          & .\.venv\Scripts\python.exe -c "import sys; assert sys.version_info[:2] == (3, 14)"

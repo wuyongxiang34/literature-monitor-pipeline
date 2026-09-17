@@ -12,6 +12,7 @@ from literature_pipeline.profiles import (
     ProfileError,
     build_guided_wos,
     build_portable_queries,
+    configure_interactively,
     resolve_profile_id,
     save_local_profile,
     set_active_profile,
@@ -164,6 +165,67 @@ class ProfileStorageTests(unittest.TestCase):
                 config = load_config(config_path)
             self.assertEqual(config["research_profile"]["id"], "legacy_topic")
             self.assertEqual(config["search"]["queries"], ["climate AND health"])
+
+    def test_wizard_uses_90_day_default_and_explains_groups(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config" / "settings.yaml"
+            config.parent.mkdir(parents=True)
+            answers = iter(
+                [
+                    "seed_island",
+                    "Island seed traits",
+                    "",
+                    "",
+                    "seed traits",
+                    "seed trait; seed functional trait",
+                    "islands",
+                    "island; insular",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "n",
+                ]
+            )
+            output: list[str] = []
+            path = configure_interactively(
+                config, input_fn=lambda _: next(answers), output_fn=output.append
+            )
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+            self.assertEqual(document["selection"]["first_run_lookback_days"], 90)
+            self.assertEqual(document["selection"]["lookback_days"], 14)
+            self.assertTrue(any("不同概念组之间用 AND" in line for line in output))
+
+    def test_wizard_update_preserves_output_and_scoring(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "config" / "settings.yaml"
+            config.parent.mkdir(parents=True)
+            original = profile_document()
+            original["selection"]["first_run_lookback_days"] = 90
+            original["output"] = {"root": "existing/data"}
+            original["scoring"] = {"topic_gate": 7, "method_terms": ["survey"]}
+            save_local_profile(config, original)
+            answers = iter(
+                [
+                    "climate_health",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "y",
+                    "n",
+                ]
+            )
+            path = configure_interactively(
+                config, input_fn=lambda _: next(answers), output_fn=lambda _: None
+            )
+            updated = yaml.safe_load(path.read_text(encoding="utf-8"))
+            self.assertEqual(updated["output"], original["output"])
+            self.assertEqual(updated["scoring"], original["scoring"])
 
 
 if __name__ == "__main__":

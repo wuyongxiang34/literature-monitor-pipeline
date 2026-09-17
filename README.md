@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/wuyongxiang34/literature-monitor-pipeline/actions/workflows/tests.yml/badge.svg)](https://github.com/wuyongxiang34/literature-monitor-pipeline/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/wuyongxiang34/literature-monitor-pipeline/releases/tag/v0.1.0)
+[![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](https://github.com/wuyongxiang34/literature-monitor-pipeline/releases/tag/v0.1.1)
 
 面向不同科研方向的 Windows 每日文献监测流水线。研究者可以通过中文命令行向导创建多个研究主题，按 Web of Science（WoS）规则生成或填写检索式，再从多个学术数据源检索、去重、筛选、评分和归档文献。
 
@@ -36,6 +36,7 @@
 - DOI、WoS ID、arXiv ID、OpenAlex ID 和标准化标题多级去重并合并元数据。
 - 概念组过滤以及主题、方法、期刊、网络、应用和归档六维 100 分评分。
 - Markdown 日报、JSON 元数据、SQLite、Excel、归档笔记、日志和 Edge 桌面卡片。
+- 为每次主题筛选记录缺失概念组、排除词和门槛诊断，同日重复运行也保留历史报告。
 - 本地、飞书 Webhook、Telegram 投递，以及按主题安装 Windows 每日计划任务。
 
 ## 安装
@@ -43,7 +44,7 @@
 ### 环境要求
 
 - Windows 10/11
-- Python 3.11 或更高版本，`py -3` 可用
+- Python 3.11、3.12、3.13 或 3.14（64 位推荐）
 - PowerShell
 - 可访问所启用学术 API 的网络环境
 
@@ -55,6 +56,30 @@ Set-ExecutionPolicy -Scope Process Bypass
 ```
 
 脚本会创建 `.venv`、安装依赖、创建本地 `.env` 并校验基础配置。
+
+脚本会复用受支持的 `.venv`，否则给出明确提示。需要指定版本或保留旧环境后重建时使用：
+
+```powershell
+# 指定 Python 3.12
+.\scripts\setup.ps1 -PythonVersion 3.12
+
+# 旧 .venv 版本不兼容时，将其重命名备份后重建
+.\scripts\setup.ps1 -PythonVersion 3.12 -RecreateVenv
+```
+
+基础安装不包含 Playwright。只有启用实验性 WoS 浏览器模式时才运行：
+
+```powershell
+.\scripts\setup.ps1 -WithPlaywright
+```
+
+该浏览器模式按 Playwright 官方要求面向 Windows 11+；Windows 10 请使用默认 WoS API 或手工导入模式。安装程序只接受预编译 wheel，不要求安装 Microsoft C++ Build Tools。
+
+安装后可以随时执行不会显示密钥内容的环境诊断：
+
+```powershell
+.\.venv\Scripts\python.exe run.py doctor
+```
 
 ### API Key
 
@@ -100,7 +125,16 @@ TELEGRAM_CHAT_ID=
 .\.venv\Scripts\python.exe run.py configure-search
 ```
 
-向导会询问主题 ID、名称、描述、模式、概念组、同义词和排除词，并将配置写到不会提交 Git 的 `config/profiles/local/`。可选择把新主题设为活动主题。
+向导会解释“同组 OR、组间 AND”，询问主题 ID、名称、概念组、同义词、排除词及回溯天数，并在保存前预览实际查询。配置写到不会提交 Git 的 `config/profiles/local/`。更新主题时保留自定义输出和评分设置。
+
+例如，“海岛种子性状”可设置两个概念组：
+
+| 概念组 | 检索词（向导中用英文分号分隔） |
+| --- | --- |
+| 种子性状 | `seed trait; seed functional trait; seed characteristic` |
+| 海岛 | `island; insular; archipelago` |
+
+新主题首次默认回溯 90 天，日常监测回溯 14 天；向导中可以修改。
 
 主题 ID 只允许小写字母、数字、`-` 和 `_`，最长 48 个字符。
 
@@ -150,7 +184,7 @@ query:
 
 selection:
   final_selection_count: 5
-  first_run_lookback_days: 30
+  first_run_lookback_days: 90
   lookback_days: 14
 
 scoring:
@@ -203,6 +237,10 @@ Advanced 模式可填写完整 WoS 高级检索式。程序检查括号、引号
 # 直接运行
 .\.venv\Scripts\python.exe run.py --profile climate_health run --no-delivery
 
+# 本次临时回溯 365 天，不修改主题 YAML
+.\.venv\Scripts\python.exe run.py --profile climate_health run --lookback-days 365 --no-delivery
+.\scripts\run_daily.ps1 -Profile climate_health -LookbackDays 365 -NoDelivery
+
 # 重新导出该主题的 Excel
 .\scripts\export_excel.ps1 -Profile climate_health
 
@@ -239,9 +277,10 @@ wos:
   .\scripts\import_wos_export.ps1 -Profile climate_health -Path "E:\path\to\savedrecs.txt" -RunAfterImport
   ```
 
-- `playwright`：实验性浏览器模式。先运行：
+- `playwright`：Windows 11+ 实验性浏览器模式。先安装可选依赖并初始化：
 
   ```powershell
+  .\scripts\setup.ps1 -WithPlaywright
   .\scripts\initialize_wos_login.ps1 -Profile climate_health
   ```
 
@@ -259,7 +298,7 @@ wos:
 
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "profile_id": "climate_health",
   "profile_name": "气候变化与人类健康",
   "status": "SUCCESS",
@@ -270,8 +309,21 @@ wos:
   "retrieved": 166,
   "deduplicated": 131,
   "eligible": 22,
+  "rejected": 109,
   "selected": 2,
   "new_records": 2,
+  "lookback_days": 14,
+  "lookback_reason": "routine",
+  "filter_summary": {
+    "excluded_by_terms": 3,
+    "missing_concept_groups": {
+      "气候变化": 41,
+      "人类健康": 65
+    },
+    "below_topic_gate": 0,
+    "eligible": 22,
+    "rejected": 109
+  },
   "source_status": {
     "sciencedirect": "ok: 15 records",
     "openalex": "ok: 56 records",
@@ -291,10 +343,12 @@ Literature_Monitor_Data/<profile_id>/
 ├── database/literature.db
 ├── papers/YYYY/MM/YYYY-MM-DD_<profile_id>/
 │   ├── metadata/candidates.json
+│   ├── metadata/rejected.json
 │   ├── metadata/selected.json
 │   └── report/
 │       ├── Daily_Report.md
-│       └── run_summary.json
+│       ├── run_summary.json
+│       └── history/<run_id>.md / <run_id>.json
 ├── exports/<profile_id>_master.xlsx
 ├── archive/raw/<profile_id>/
 ├── desktop_widget/latest.html
@@ -302,6 +356,13 @@ Literature_Monitor_Data/<profile_id>/
 ```
 
 Excel 包含 `Master_Literature`、`Candidates_Unverified`、`Manual_Review`、`Daily_Run_Summary` 和 `Download_Log`。如果 Excel 正被占用，会生成带 `_pending.xlsx` 后缀的导出。
+
+当日报没有精选时，请先查看 `run_summary.json`：
+
+- `retrieved == 0`：数据源没有返回候选，检查时间范围、数据源状态和 API Key；
+- `eligible == 0`：候选全部被主题规则过滤，查看 `filter_summary.missing_concept_groups` 和 `metadata/rejected.json`；
+- `eligible > 0` 且 `new_records == 0`：符合主题的记录已经在数据库中；
+- 小众主题可用 `-LookbackDays 365` 做一次历史验证，无需编辑 YAML。
 
 ## 数据可信度与边界
 

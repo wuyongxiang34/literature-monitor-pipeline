@@ -13,6 +13,7 @@ SAMPLE_REPORT = """# 2026-08-23 ES–HWB 文献日报
 - 研究方向：生态系统服务与人类福祉
 - 候选记录：131
 - 去重后：105
+- 主题筛选后：22
 - 本次新增：1
 - 最终精选：1
 - 数据源状态：sciencedirect: ok: 14 records；openalex: skipped: missing key；wos: ok: 30 WoS Core records (Starter API; 114 matched)
@@ -66,6 +67,8 @@ class DesktopWidgetTests(unittest.TestCase):
             render_widget(report, output)
             content = output.read_text(encoding="utf-8")
             self.assertIn('class="paper-card"', content)
+            self.assertIn("筛选后", content)
+            self.assertIn(">22<", content)
             self.assertIn("<em>Solanum</em>", content)
             self.assertNotIn("<ce:italic>", content)
             self.assertNotIn('http-equiv="refresh"', content)

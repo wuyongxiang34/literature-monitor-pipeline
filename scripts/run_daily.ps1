@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$Profile = "",
+    [int]$LookbackDays = 0,
     [switch]$NoDelivery
 )
 
@@ -8,6 +9,10 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $Python = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 $Config = Join-Path $ProjectRoot "config\settings.yaml"
+
+if ($PSBoundParameters.ContainsKey("LookbackDays") -and $LookbackDays -lt 1) {
+    throw "LookbackDays must be greater than 0 when specified."
+}
 
 function Disable-StaleLoopbackProxy {
     $DisabledVariables = [System.Collections.Generic.List[string]]::new()
@@ -76,6 +81,9 @@ if (-not [string]::IsNullOrWhiteSpace($Profile)) {
     $Arguments += @("--profile", $Profile)
 }
 $Arguments += "run"
+if ($LookbackDays -gt 0) {
+    $Arguments += @("--lookback-days", $LookbackDays)
+}
 if ($NoDelivery) {
     $Arguments += "--no-delivery"
 }

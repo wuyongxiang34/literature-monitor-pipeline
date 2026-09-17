@@ -16,7 +16,7 @@ from .desktop_widget import render_widget
 from .digest import build_digest
 from .models import Paper
 from .normalize import deduplicate
-from .scoring import score_and_select, validate_scores
+from .scoring import score_and_select_detailed, validate_scores
 from .sources import collect_sources
 from .storage import LiteratureDatabase, archive_note, export_excel
 from .wos import search_wos
@@ -102,7 +102,7 @@ def run_pipeline(config: dict[str, Any], *, no_delivery: bool = False) -> dict[s
     timezone = ZoneInfo(config.get("schedule", {}).get("timezone", "Asia/Taipei"))
     started = dt.datetime.now(timezone)
     run_date = started.date().isoformat()
-    run_id = started.strftime("%Y%m%dT%H%M%S%z")
+    run_id = started.strftime("%Y%m%dT%H%M%S%f%z")
 
     data_root = resolve_project_path(config, config["paths"]["root"])
     profile_id = config["research_profile"]["id"]
@@ -118,9 +118,18 @@ def run_pipeline(config: dict[str, Any], *, no_delivery: bool = False) -> dict[s
     database_path = resolve_project_path(config, config["paths"]["database"])
     lock_path = data_root / "state" / "daily.lock"
     with RunLock(lock_path):
-        lookback = int(config["search"]["lookback_days"])
-        if not database_path.exists():
-            lookback = int(config["search"].get("first_run_lookback_days", 30))
+        with LiteratureDatabase(database_path) as database:
+            existing_paper_count = database.paper_count()
+        override = config.get("_lookback_override")
+        if override is not None:
+            lookback = int(override)
+            lookback_reason = "override"
+        elif existing_paper_count == 0:
+            lookback = int(config["search"].get("first_run_lookback_days", 90))
+            lookback_reason = "initial_empty_database"
+        else:
+            lookback = int(config["search"]["lookback_days"])
+            lookback_reason = "routine"
         start_date = (started.date() - dt.timedelta(days=lookback - 1)).isoformat()
         end_date = run_date
         LOGGER.info("检索窗口：%s 至 %s", start_date, end_date)
@@ -131,7 +140,7 @@ def run_pipeline(config: dict[str, Any], *, no_delivery: bool = False) -> dict[s
         source_status["wos"] = wos_status
         all_papers = [*wos_papers, *public_papers]
         unique_papers, duplicate_count = deduplicate(all_papers)
-        scored, _ = score_and_select(unique_papers, config)
+        scored, _, filter_summary, rejected = score_and_select_detailed(unique_papers, config)
         validate_scores(scored, config)
 
         with LiteratureDatabase(database_path) as database:
@@ -174,11 +183,16 @@ def run_pipeline(config: dict[str, Any], *, no_delivery: bool = False) -> dict[s
                 selected_new,
                 retrieved=len(all_papers),
                 deduplicated=len(unique_papers),
+                eligible_count=len(scored),
                 new_count=new_count,
                 source_status=source_status,
+                filter_summary=filter_summary,
             )
             digest_path = report_dir / "Daily_Report.md"
             digest_path.write_text(digest, encoding="utf-8")
+            history_dir = report_dir / "history"
+            history_dir.mkdir(parents=True, exist_ok=True)
+            (history_dir / f"{run_id}.md").write_text(digest, encoding="utf-8")
             widget_status = "disabled"
             widget_config = config.get("desktop_widget") or {}
             if widget_config.get("enabled", False):
@@ -200,6 +214,7 @@ def run_pipeline(config: dict[str, Any], *, no_delivery: bool = False) -> dict[s
                     widget_status = f"error: {exc}"
                     LOGGER.warning("桌面文献卡片更新失败：%s", exc)
             _write_json(metadata_dir / "candidates.json", [paper.as_dict() for paper in scored])
+            _write_json(metadata_dir / "rejected.json", rejected)
             _write_json(metadata_dir / "selected.json", [paper.as_dict() for paper in selected_new])
 
             archive_paths: list[str] = []
@@ -242,8 +257,12 @@ def run_pipeline(config: dict[str, Any], *, no_delivery: bool = False) -> dict[s
             "retrieved": len(all_papers),
             "deduplicated": len(unique_papers),
             "eligible": len(scored),
+            "rejected": len(rejected),
             "selected": len(selected_new),
             "new_records": new_count,
+            "filter_summary": filter_summary,
+            "lookback_days": lookback,
+            "lookback_reason": lookback_reason,
             "source_status": source_status,
             "database": str(database_path),
             "excel": excel_status,
@@ -254,5 +273,6 @@ def run_pipeline(config: dict[str, Any], *, no_delivery: bool = False) -> dict[s
             "log": str(log_path),
         }
         _write_json(report_dir / "run_summary.json", summary)
+        _write_json(report_dir / "history" / f"{run_id}.json", summary)
         _close_logging()
         return summary

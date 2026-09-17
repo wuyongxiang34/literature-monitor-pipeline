@@ -72,13 +72,25 @@ class PipelineIntegrationTests(unittest.TestCase):
                 ),
             ):
                 summary = run_pipeline(config, no_delivery=True)
+                routine_summary = run_pipeline(config, no_delivery=True)
 
             self.assertEqual(summary["status"], "SUCCESS")
-            self.assertEqual(summary["version"], "0.1.0")
+            self.assertEqual(summary["version"], "0.1.1")
             self.assertEqual(summary["profile_id"], "es_hwb")
             self.assertTrue(Path(summary["database"]).exists())
             self.assertTrue(Path(summary["excel"]).exists())
             self.assertTrue(Path(summary["report"]).exists())
+            self.assertEqual(
+                summary["lookback_days"], config["search"]["first_run_lookback_days"]
+            )
+            self.assertEqual(summary["lookback_reason"], "initial_empty_database")
+            self.assertEqual(routine_summary["lookback_days"], 14)
+            self.assertEqual(routine_summary["lookback_reason"], "routine")
+            self.assertIn("filter_summary", summary)
+            report_dir = Path(summary["report"]).parent
+            self.assertTrue((report_dir / "history" / f"{summary['run_id']}.md").is_file())
+            self.assertTrue((report_dir / "history" / f"{summary['run_id']}.json").is_file())
+            self.assertTrue((Path(summary["report"]).parent.parent / "metadata" / "rejected.json").is_file())
             workbook = load_workbook(summary["excel"], read_only=True)
             self.assertEqual(workbook["Master_Literature"].max_row, 2)
             self.assertEqual(workbook["Candidates_Unverified"].max_row, 2)
@@ -160,6 +172,39 @@ class PipelineIntegrationTests(unittest.TestCase):
             self.assertTrue(second_db.exists())
             self.assertIn("Topic One 文献日报", Path(summaries[0]["report"]).read_text(encoding="utf-8"))
             self.assertIn("Topic Two 文献日报", Path(summaries[1]["report"]).read_text(encoding="utf-8"))
+
+    def test_empty_database_keeps_initial_window_and_override_wins(self):
+        base = load_config(
+            PROJECT_ROOT / "config" / "settings.yaml", profile_id="es_hwb"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            config = copy.deepcopy(base)
+            config["_project_root"] = directory
+            config["paths"] = {
+                "root": "system",
+                "database": "system/database/literature.db",
+                "excel_export": "system/exports/master.xlsx",
+            }
+            config["archive"] = {"enabled": False, "root": "system/archive"}
+            config["desktop_widget"] = {"enabled": False}
+            config["delivery"] = {"channel": "local"}
+            with (
+                patch(
+                    "literature_pipeline.pipeline.collect_sources",
+                    return_value=([], {"sciencedirect": "ok: 0 records"}),
+                ),
+                patch("literature_pipeline.pipeline.search_wos", return_value=([], "skipped: disabled")),
+            ):
+                first = run_pipeline(config, no_delivery=True)
+                second = run_pipeline(config, no_delivery=True)
+                override_config = copy.deepcopy(config)
+                override_config["_lookback_override"] = 365
+                overridden = run_pipeline(override_config, no_delivery=True)
+
+            self.assertEqual(first["lookback_reason"], "initial_empty_database")
+            self.assertEqual(second["lookback_reason"], "initial_empty_database")
+            self.assertEqual(overridden["lookback_days"], 365)
+            self.assertEqual(overridden["lookback_reason"], "override")
 
 
 if __name__ == "__main__":

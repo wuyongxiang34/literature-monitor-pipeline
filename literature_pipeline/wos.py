@@ -42,7 +42,10 @@ def _import_playwright():
     try:
         from playwright.sync_api import sync_playwright
     except ImportError as exc:
-        raise RuntimeError("缺少 Playwright。请先运行 scripts/setup.ps1。") from exc
+        raise RuntimeError(
+            "缺少可选的 Playwright。请运行 .\\scripts\\setup.ps1 -WithPlaywright；"
+            "普通 WoS API 和手工导入模式不需要安装它。"
+        ) from exc
     return sync_playwright
 
 

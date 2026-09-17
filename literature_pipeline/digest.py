@@ -21,8 +21,10 @@ def build_digest(
     *,
     retrieved: int,
     deduplicated: int,
+    eligible_count: int,
     new_count: int,
     source_status: dict[str, str],
+    filter_summary: dict[str, Any] | None = None,
 ) -> str:
     source_line = "；".join(f"{source}: {status}" for source, status in source_status.items())
     keyword_counts = Counter(term for paper in selected for term in paper.matched_terms)
@@ -34,6 +36,7 @@ def build_digest(
         f"- 研究方向：{field}",
         f"- 候选记录：{retrieved}",
         f"- 去重后：{deduplicated}",
+        f"- 主题筛选后：{eligible_count}",
         f"- 本次新增：{new_count}",
         f"- 最终精选：{len(selected)}",
         f"- 数据源状态：{source_line}",
@@ -44,10 +47,26 @@ def build_digest(
         "",
     ]
     if not selected:
-        if new_count == 0:
+        if retrieved == 0:
+            empty_message = (
+                "本次启用的数据源没有返回候选记录。请检查检索时间范围、数据源状态和 API Key。"
+            )
+        elif eligible_count == 0:
+            missing = (filter_summary or {}).get("missing_concept_groups") or {}
+            ranked = sorted(
+                ((name, int(count)) for name, count in missing.items() if int(count) > 0),
+                key=lambda item: item[1],
+                reverse=True,
+            )
+            detail = "、".join(f"{name}（{count} 条缺失）" for name, count in ranked[:3])
+            empty_message = "候选记录已找到，但全部未通过主题筛选。"
+            if detail:
+                empty_message += f"主要缺失概念组：{detail}。"
+            empty_message += "请检查同义词、概念组数量，或临时扩大回溯天数。"
+        elif new_count == 0:
             empty_message = "本次检索记录均已存在于数据库中，因此没有新增文献需要重复精选。"
         else:
-            empty_message = "本次新增记录中没有达到主题门槛的文献。"
+            empty_message = "本次有新增记录，但没有可展示的精选文献，请查看运行摘要和筛选诊断。"
         lines.extend(["## 今日精选", "", empty_message, ""])
         return "\n".join(lines)
 

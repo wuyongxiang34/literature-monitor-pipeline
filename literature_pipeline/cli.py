@@ -9,6 +9,7 @@ import yaml
 
 from . import __version__
 from .config import load_config
+from .doctor import print_diagnostics
 from .pipeline import run_pipeline
 from .profiles import (
     build_portable_queries,
@@ -38,7 +39,9 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     run = subparsers.add_parser("run", help="执行每日检索")
     run.add_argument("--no-delivery", action="store_true", help="不发送外部消息")
+    run.add_argument("--lookback-days", type=_positive_int, help="仅覆盖本次运行的回溯天数")
     subparsers.add_parser("validate", help="校验配置")
+    subparsers.add_parser("doctor", help="检查 Python、依赖、配置和凭据状态")
     subparsers.add_parser("login-wos", help="人工初始化 WoS 持久登录")
     subparsers.add_parser("export", help="从 SQLite 重新导出 Excel")
     subparsers.add_parser("configure-search", help="交互式创建或更新研究主题")
@@ -56,10 +59,19 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("必须是大于 0 的整数")
+    return parsed
+
+
 def main(argv: list[str] | None = None) -> int:
     _configure_console_output()
     args = build_parser().parse_args(argv)
     try:
+        if args.command == "doctor":
+            return print_diagnostics(args.config, args.profile)
         if args.command == "configure-search":
             configure_interactively(args.config)
             return 0
@@ -127,6 +139,8 @@ def main(argv: list[str] | None = None) -> int:
                 export_excel(database, excel_path)
             print(excel_path)
             return 0
+        if args.lookback_days is not None:
+            config["_lookback_override"] = args.lookback_days
         summary = run_pipeline(config, no_delivery=args.no_delivery)
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         return 0 if summary["status"] in {"SUCCESS", "PARTIAL"} else 1

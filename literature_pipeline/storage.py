@@ -166,6 +166,9 @@ class LiteratureDatabase:
             self.connection.commit()
         self.close()
 
+    def paper_count(self) -> int:
+        return int(self.connection.execute("SELECT COUNT(*) FROM papers").fetchone()[0])
+
     def _find_existing(self, paper: Paper) -> sqlite3.Row | None:
         identifiers = (
             ("doi", normalize_doi(paper.doi)),
@@ -328,7 +331,7 @@ class LiteratureDatabase:
         self.connection.execute(
             """
             INSERT INTO task_status(task_name, last_run, last_successful_run, status, message, updated_time)
-            VALUES ('daily_es_hwb', ?, ?, ?, ?, ?)
+            VALUES ('daily', ?, ?, ?, ?, ?)
             ON CONFLICT(task_name) DO UPDATE SET
                 last_run=excluded.last_run,
                 last_successful_run=CASE
